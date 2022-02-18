@@ -2,6 +2,7 @@ import asyncio
 import atexit
 import signal
 import sqlite3
+import pytest
 
 from secrets import token_bytes
 from typing import Dict, List, Optional
@@ -20,24 +21,35 @@ from chia.simulator.start_simulator import service_kwargs_for_full_node_simulato
 from chia.timelord.timelord_launcher import kill_processes, spawn_process
 from chia.types.peer_info import PeerInfo
 from chia.util.bech32m import encode_puzzle_hash
-from tests.block_tools import create_block_tools, create_block_tools_async, test_constants
+from tests.block_tools import create_block_tools, create_block_tools_async, test_constants, BlockTools
 from tests.util.keyring import TempKeyring
 from chia.util.hash import std_hash
 from chia.util.ints import uint16, uint32
 from chia.util.keychain import bytes_to_mnemonic
 from tests.time_out_assert import time_out_assert_custom_interval
 
+# from conftest import shared_block_tools
+
 
 def cleanup_keyring(keyring: TempKeyring):
     keyring.cleanup()
 
 
-temp_keyring = TempKeyring()
+temp_keyring = TempKeyring(populate=True)
 keychain = temp_keyring.get_keychain()
 atexit.register(cleanup_keyring, temp_keyring)  # Attempt to cleanup the temp keychain
-bt = create_block_tools(constants=test_constants, keychain=keychain)
 
-self_hostname = bt.config["self_hostname"]
+
+@pytest.fixture(scope="session")
+def bt() -> BlockTools:
+    _shared_block_tools = create_block_tools(constants=test_constants, keychain=keychain)
+    return _shared_block_tools
+    # yield _shared_block_tools
+    # _shared_block_tools.cleanup()
+
+
+# self_hostname = bt.config["self_hostname"]
+self_hostname = "localhost"
 
 
 def constants_for_dic(dic):
@@ -142,7 +154,7 @@ async def setup_wallet_node(
     starting_height=None,
     initial_num_public_keys=5,
 ):
-    with TempKeyring() as keychain:
+    with TempKeyring(populate=True) as keychain:
         config = bt.config["wallet"]
         config["port"] = port
         config["rpc_port"] = port + 1000
@@ -349,7 +361,7 @@ async def setup_two_nodes(consensus_constants: ConsensusConstants, db_version: i
     Setup and teardown of two full nodes, with blockchains and separate DBs.
     """
 
-    with TempKeyring() as keychain1, TempKeyring() as keychain2:
+    with TempKeyring(populate=True) as keychain1, TempKeyring(populate=True) as keychain2:
         node_iters = [
             setup_full_node(
                 consensus_constants,
@@ -385,7 +397,7 @@ async def setup_n_nodes(consensus_constants: ConsensusConstants, n: int, db_vers
     node_iters = []
     keyrings_to_cleanup = []
     for i in range(n):
-        keyring = TempKeyring()
+        keyring = TempKeyring(populate=True)
         keyrings_to_cleanup.append(keyring)
         node_iters.append(
             setup_full_node(
@@ -412,8 +424,8 @@ async def setup_n_nodes(consensus_constants: ConsensusConstants, n: int, db_vers
 async def setup_node_and_wallet(
     consensus_constants: ConsensusConstants, starting_height=None, key_seed=None, db_version=1
 ):
-    with TempKeyring() as keychain:
-        btools = await create_block_tools_async(constants=test_constants, keychain=keychain)
+    with TempKeyring(populate=True) as keychain:
+        btools = await create_block_tools_async(constants=test_constants, keychain=keychain)  # xxx
         node_iters = [
             setup_full_node(
                 consensus_constants, "blockchain_test.db", 21234, btools, simulator=False, db_version=db_version
@@ -441,7 +453,7 @@ async def setup_simulators_and_wallets(
     initial_num_public_keys=5,
     db_version=1,
 ):
-    with TempKeyring() as keychain1, TempKeyring() as keychain2:
+    with TempKeyring(populate=True) as keychain1, TempKeyring(populate=True) as keychain2:
         simulators: List[FullNodeAPI] = []
         wallets = []
         node_iters = []
@@ -505,15 +517,20 @@ async def setup_farmer_harvester(consensus_constants: ConsensusConstants, start_
 
 
 async def setup_full_system(
-    consensus_constants: ConsensusConstants, b_tools=None, b_tools_1=None, connect_to_daemon=False, db_version=1
+    consensus_constants: ConsensusConstants,
+    shared_b_tools,
+    b_tools=None,
+    b_tools_1=None,
+    connect_to_daemon=False,
+    db_version=1,
 ):
-    with TempKeyring() as keychain1, TempKeyring() as keychain2:
+    with TempKeyring(populate=True) as keychain1, TempKeyring(populate=True) as keychain2:
         if b_tools is None:
             b_tools = await create_block_tools_async(constants=test_constants, keychain=keychain1)
         if b_tools_1 is None:
             b_tools_1 = await create_block_tools_async(constants=test_constants, keychain=keychain2)
         node_iters = [
-            setup_introducer(21233),
+            setup_introducer(21233, shared_b_tools),
             setup_harvester(21234, 21235, consensus_constants, b_tools),
             setup_farmer(21235, consensus_constants, b_tools, uint16(21237)),
             setup_vdf_clients(8000),

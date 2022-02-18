@@ -13,8 +13,8 @@ from chia.full_node.hint_store import HintStore
 from chia.types.full_block import FullBlock
 from chia.util.db_wrapper import DBWrapper
 from chia.util.path import mkdir
+from tests.block_tools import BlockTools
 
-from tests.setup_nodes import bt
 
 blockchain_db_counter: int = 0
 
@@ -35,9 +35,11 @@ async def create_blockchain(constants: ConsensusConstants, db_version: int):
     return bc1, connection, db_path
 
 
+# @pytest.fixture(scope="module")
 def persistent_blocks(
     num_of_blocks: int,
     db_name: str,
+    bt: BlockTools,
     seed: bytes = b"",
     empty_sub_slots=0,
     normalized_to_identity_cc_eos: bool = False,
@@ -71,6 +73,7 @@ def persistent_blocks(
         num_of_blocks,
         seed,
         empty_sub_slots,
+        bt,
         normalized_to_identity_cc_eos,
         normalized_to_identity_icc_eos,
         normalized_to_identity_cc_sp,
@@ -78,11 +81,13 @@ def persistent_blocks(
     )
 
 
+# @pytest.fixture(scope="module")
 def new_test_db(
     path: Path,
     num_of_blocks: int,
     seed: bytes,
     empty_sub_slots: int,
+    bt: BlockTools,
     normalized_to_identity_cc_eos: bool = False,  # CC_EOS,
     normalized_to_identity_icc_eos: bool = False,  # ICC_EOS
     normalized_to_identity_cc_sp: bool = False,  # CC_SP,

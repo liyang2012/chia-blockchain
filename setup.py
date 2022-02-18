@@ -43,7 +43,7 @@ upnp_dependencies = [
 dev_dependencies = [
     "pre-commit",
     "pytest",
-    "pytest-asyncio",
+    "pytest-asyncio>=0.18.1",
     "pytest-monitor; sys_platform == 'linux'",
     "pytest-xdist",
     "isort",
