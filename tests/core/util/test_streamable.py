@@ -69,8 +69,8 @@ class TestStreamable(unittest.TestCase):
         except NotImplementedError:
             pass
 
-    def test_json(self):
-        block = bt.create_genesis_block(test_constants, bytes([0] * 32), b"0")
+    def test_json(self, bt):
+        block = bt.create_genesis_block(test_constants, bytes32([0] * 32), uint64(0))
 
         dict_block = block.to_json_dict()
         assert FullBlock.from_json_dict(dict_block) == block

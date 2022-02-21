@@ -26,22 +26,6 @@ from chia.util.ints import uint16, uint32
 from chia.util.keychain import bytes_to_mnemonic
 from tests.time_out_assert import time_out_assert_custom_interval
 
-# from conftest import shared_block_tools
-# from tests.conftest import bt
-
-
-# TODO bt fixture should live in conftest.py
-# @pytest.fixture(scope="session")
-# def bt() -> BlockTools:
-#    _shared_block_tools = create_block_tools(constants=test_constants, keychain=keychain)
-#    return _shared_block_tools
-# yield _shared_block_tools
-# _shared_block_tools.cleanup()
-
-
-# self_hostname = bt.config["self_hostname"]
-# self_hostname = "localhost"
-
 
 def constants_for_dic(dic):
     return test_constants.replace(**dic)
@@ -431,7 +415,7 @@ async def setup_node_and_wallet(
     consensus_constants: ConsensusConstants, starting_height=None, key_seed=None, db_version=1
 ):
     with TempKeyring(populate=True) as keychain:
-        btools = await create_block_tools_async(constants=test_constants, keychain=keychain)  # xxx
+        btools = await create_block_tools_async(constants=test_constants, keychain=keychain)
         node_iters = [
             setup_full_node(
                 consensus_constants,
@@ -461,7 +445,7 @@ async def setup_node_and_wallet(
         await _teardown_nodes(node_iters)
 
 
-async def setup_simulators_and_wallets(  # XXX
+async def setup_simulators_and_wallets(
     simulator_count: int,
     wallet_count: int,
     dic: Dict,
@@ -480,7 +464,7 @@ async def setup_simulators_and_wallets(  # XXX
         for index in range(0, simulator_count):
             port = starting_port + index
             db_name = f"blockchain_test_{port}.db"
-            # xxx convert bt_tools to bt fixture
+            # TODO convert this bt_tools variable to a passed-in variable
             bt_tools = await create_block_tools_async(
                 consensus_constants, const_dict=dic, keychain=keychain1
             )  # block tools modifies constants
@@ -537,7 +521,7 @@ async def setup_farmer_harvester(bt: BlockTools, consensus_constants: ConsensusC
     await _teardown_nodes(node_iters)
 
 
-async def setup_full_system(  # xxx which of these 3 block_tools are needed in which places?
+async def setup_full_system(
     consensus_constants: ConsensusConstants,
     shared_b_tools: BlockTools,
     b_tools: BlockTools = None,

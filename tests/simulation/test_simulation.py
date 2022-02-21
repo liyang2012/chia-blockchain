@@ -33,12 +33,13 @@ class TestSimulation:
     # because of a hack in shutting down the full node, which means you cannot run
     # more than one simulations per process.
     @pytest_asyncio.fixture(scope="function")
-    async def extra_node(self):
+    async def extra_node(self, self_hostname):
         with TempKeyring() as keychain:
             b_tools = await create_block_tools_async(constants=test_constants_modified, keychain=keychain)
             async for _ in setup_full_node(
                 test_constants_modified,
                 "blockchain_test_3.db",
+                self_hostname,
                 21240,
                 b_tools,
                 db_version=1,
@@ -51,7 +52,7 @@ class TestSimulation:
             yield _
 
     @pytest.mark.asyncio
-    async def test_simulation_1(self, simulation, extra_node):
+    async def test_simulation_1(self, simulation, extra_node, self_hostname):
         node1, node2, _, _, _, _, _, _, _, sanitizer_server, server1 = simulation
         await server1.start_client(PeerInfo(self_hostname, uint16(21238)))
         # Use node2 to test node communication, since only node1 extends the chain.

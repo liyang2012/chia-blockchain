@@ -52,7 +52,7 @@ class TestWalletRpc:
         [True, False],
     )
     @pytest.mark.asyncio
-    async def test_wallet_rpc(self, two_wallet_nodes, trusted):
+    async def test_wallet_rpc(self, two_wallet_nodes, trusted, bt):
         test_rpc_port = uint16(21529)
         test_rpc_port_2 = uint16(21536)
         test_rpc_port_node = uint16(21530)
@@ -136,9 +136,9 @@ class TestWalletRpc:
         await time_out_assert(5, wallet.get_confirmed_balance, initial_funds)
         await time_out_assert(5, wallet.get_unconfirmed_balance, initial_funds)
 
-        client = await WalletRpcClient.create(self_hostname, test_rpc_port, bt.root_path, config)
-        client_2 = await WalletRpcClient.create(self_hostname, test_rpc_port_2, bt.root_path, config)
-        client_node = await FullNodeRpcClient.create(self_hostname, test_rpc_port_node, bt.root_path, config)
+        client = await WalletRpcClient.create(hostname, test_rpc_port, bt.root_path, config)
+        client_2 = await WalletRpcClient.create(hostname, test_rpc_port_2, bt.root_path, config)
+        client_node = await FullNodeRpcClient.create(hostname, test_rpc_port_node, bt.root_path, config)
         try:
             await time_out_assert(5, client.get_synced)
             addr = encode_puzzle_hash(await wallet_node_2.wallet_state_manager.main_wallet.get_new_puzzlehash(), "xch")
