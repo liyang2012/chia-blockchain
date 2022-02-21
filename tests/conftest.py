@@ -1,3 +1,5 @@
+import atexit
+
 import pytest
 import pytest_asyncio
 import tempfile
@@ -7,9 +9,9 @@ from chia.consensus.constants import ConsensusConstants
 from tests.block_tools import BlockTools, test_constants, create_block_tools
 
 # from tests.setup_nodes import setup_shared_block_tools_and_keyring
-from tests.setup_nodes import bt
 from tests.util.keyring import TempKeyring
-from tests.wallet_tools import WalletTool
+
+# from tests.wallet_tools import WalletTool # see test_mempool.py
 from typing import Tuple
 
 # the_block_tools = BlockTools()
@@ -26,6 +28,28 @@ from typing import Tuple
 # def shared_wallet_tool_helper():
 #    return the_wallet_tool
 # cleanup
+
+
+def cleanup_keyring(keyring: TempKeyring):
+    keyring.cleanup()
+
+
+temp_keyring = TempKeyring(populate=True)
+keychain = temp_keyring.get_keychain()
+atexit.register(cleanup_keyring, temp_keyring)  # Attempt to clean up the temp keychain
+
+
+@pytest.fixture(scope="session", name="bt")
+def bt() -> BlockTools:
+    _shared_block_tools = create_block_tools(constants=test_constants, keychain=keychain)
+    return _shared_block_tools
+    # yield _shared_block_tools
+    # _shared_block_tools.cleanup()
+
+
+@pytest.fixture(scope="session")
+def self_hostname(bt):
+    return bt.config["self_hostname"]
 
 
 def setup_shared_block_tools_and_keyring(
@@ -47,7 +71,7 @@ def setup_shared_block_tools_and_keyring(
 #    yield shared_block_tools_helper.block_tools
 #    shared_block_tools_helper.cleanup()
 
-
+'''
 @pytest.fixture(scope="module")
 def wallet_a(shared_block_tools, cleanup_shared_wallet_tool) -> WalletTool:
     """
@@ -55,7 +79,7 @@ def wallet_a(shared_block_tools, cleanup_shared_wallet_tool) -> WalletTool:
     for all tests in the module.
     """
     return shared_block_tools.wallet_tool
-
+'''
 
 # TODO: tests.setup_nodes (which is also imported by tests.util.blockchain) creates a
 #       global BlockTools at tests.setup_nodes.bt.  This results in an attempt to create

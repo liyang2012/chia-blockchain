@@ -1,8 +1,6 @@
 import asyncio
-import atexit
 import signal
 import sqlite3
-import pytest
 
 from secrets import token_bytes
 from typing import Dict, List, Optional
@@ -21,7 +19,7 @@ from chia.simulator.start_simulator import service_kwargs_for_full_node_simulato
 from chia.timelord.timelord_launcher import kill_processes, spawn_process
 from chia.types.peer_info import PeerInfo
 from chia.util.bech32m import encode_puzzle_hash
-from tests.block_tools import create_block_tools, create_block_tools_async, test_constants, BlockTools
+from tests.block_tools import create_block_tools_async, test_constants, BlockTools
 from tests.util.keyring import TempKeyring
 from chia.util.hash import std_hash
 from chia.util.ints import uint16, uint32
@@ -29,27 +27,20 @@ from chia.util.keychain import bytes_to_mnemonic
 from tests.time_out_assert import time_out_assert_custom_interval
 
 # from conftest import shared_block_tools
+# from tests.conftest import bt
 
 
-def cleanup_keyring(keyring: TempKeyring):
-    keyring.cleanup()
-
-
-temp_keyring = TempKeyring(populate=True)
-keychain = temp_keyring.get_keychain()
-atexit.register(cleanup_keyring, temp_keyring)  # Attempt to cleanup the temp keychain
-
-
-@pytest.fixture(scope="session")
-def bt() -> BlockTools:
-    _shared_block_tools = create_block_tools(constants=test_constants, keychain=keychain)
-    return _shared_block_tools
-    # yield _shared_block_tools
-    # _shared_block_tools.cleanup()
+# TODO bt fixture should live in conftest.py
+# @pytest.fixture(scope="session")
+# def bt() -> BlockTools:
+#    _shared_block_tools = create_block_tools(constants=test_constants, keychain=keychain)
+#    return _shared_block_tools
+# yield _shared_block_tools
+# _shared_block_tools.cleanup()
 
 
 # self_hostname = bt.config["self_hostname"]
-self_hostname = "localhost"
+# self_hostname = "localhost"
 
 
 def constants_for_dic(dic):
@@ -65,7 +56,7 @@ async def _teardown_nodes(node_aiters: List) -> None:
             pass
 
 
-async def setup_daemon(btools):
+async def setup_daemon(btools: BlockTools):
     root_path = btools.root_path
     config = btools.config
     lockfile = singleton(daemon_launch_lock_path(root_path))
@@ -86,8 +77,9 @@ async def setup_daemon(btools):
 async def setup_full_node(
     consensus_constants: ConsensusConstants,
     db_name,
+    self_hostname: str,
     port,
-    local_bt,
+    local_bt: BlockTools,
     introducer_port=None,
     simulator=False,
     send_uncompact_interval=0,
@@ -144,10 +136,13 @@ async def setup_full_node(
         db_path.unlink()
 
 
+# Note: convert these setup functions to fixtures, or push it one layer up,
+# keeping these usable independently?
 async def setup_wallet_node(
+    self_hostname: str,
     port,
     consensus_constants: ConsensusConstants,
-    local_bt,
+    local_bt: BlockTools,
     full_node_port=None,
     introducer_port=None,
     key_seed=None,
@@ -155,7 +150,7 @@ async def setup_wallet_node(
     initial_num_public_keys=5,
 ):
     with TempKeyring(populate=True) as keychain:
-        config = bt.config["wallet"]
+        config = local_bt.config["wallet"]
         config["port"] = port
         config["rpc_port"] = port + 1000
         if starting_height is not None:
@@ -171,7 +166,7 @@ async def setup_wallet_node(
         db_path_key_suffix = str(first_pk.get_fingerprint())
         db_name = f"test-wallet-db-{port}-KEY.sqlite"
         db_path_replaced: str = db_name.replace("KEY", db_path_key_suffix)
-        db_path = bt.root_path / db_path_replaced
+        db_path = local_bt.root_path / db_path_replaced
 
         if db_path.exists():
             db_path.unlink()
@@ -213,7 +208,12 @@ async def setup_wallet_node(
 
 
 async def setup_harvester(
-    port, farmer_port, consensus_constants: ConsensusConstants, b_tools, start_service: bool = True
+    b_tools: BlockTools,
+    self_hostname: str,
+    port,
+    farmer_port,
+    consensus_constants: ConsensusConstants,
+    start_service: bool = True,
 ):
     kwargs = service_kwargs_for_harvester(b_tools.root_path, b_tools.config["harvester"], consensus_constants)
     kwargs.update(
@@ -237,14 +237,15 @@ async def setup_harvester(
 
 
 async def setup_farmer(
+    b_tools: BlockTools,
+    self_hostname: str,
     port,
     consensus_constants: ConsensusConstants,
-    b_tools,
     full_node_port: Optional[uint16] = None,
     start_service: bool = True,
 ):
-    config = bt.config["farmer"]
-    config_pool = bt.config["pool"]
+    config = b_tools.config["farmer"]
+    config_pool = b_tools.config["pool"]
 
     config["xch_target_address"] = encode_puzzle_hash(b_tools.farmer_ph, "xch")
     config["pool_public_keys"] = [bytes(pk).hex() for pk in b_tools.pool_pubkeys]
@@ -277,7 +278,7 @@ async def setup_farmer(
     await service.wait_closed()
 
 
-async def setup_introducer(port):
+async def setup_introducer(bt: BlockTools, port):
     kwargs = service_kwargs_for_introducer(
         bt.root_path,
         bt.config["introducer"],
@@ -299,7 +300,7 @@ async def setup_introducer(port):
     await service.wait_closed()
 
 
-async def setup_vdf_client(port):
+async def setup_vdf_client(bt: BlockTools, self_hostname: str, port):
     vdf_task_1 = asyncio.create_task(spawn_process(self_hostname, port, 1, bt.config.get("prefer_ipv6")))
 
     def stop():
@@ -312,7 +313,7 @@ async def setup_vdf_client(port):
     await kill_processes()
 
 
-async def setup_vdf_clients(port):
+async def setup_vdf_clients(bt: BlockTools, self_hostname: str, port):
     vdf_task_1 = asyncio.create_task(spawn_process(self_hostname, port, 1, bt.config.get("prefer_ipv6")))
     vdf_task_2 = asyncio.create_task(spawn_process(self_hostname, port, 2, bt.config.get("prefer_ipv6")))
     vdf_task_3 = asyncio.create_task(spawn_process(self_hostname, port, 3, bt.config.get("prefer_ipv6")))
@@ -328,7 +329,9 @@ async def setup_vdf_clients(port):
     await kill_processes()
 
 
-async def setup_timelord(port, full_node_port, rpc_port, sanitizer, consensus_constants: ConsensusConstants, b_tools):
+async def setup_timelord(
+    port, full_node_port, rpc_port, sanitizer, consensus_constants: ConsensusConstants, b_tools: BlockTools
+):
     config = b_tools.config["timelord"]
     config["port"] = port
     config["full_node_peer"]["port"] = full_node_port
@@ -356,7 +359,7 @@ async def setup_timelord(port, full_node_port, rpc_port, sanitizer, consensus_co
     await service.wait_closed()
 
 
-async def setup_two_nodes(consensus_constants: ConsensusConstants, db_version: int):
+async def setup_two_nodes(consensus_constants: ConsensusConstants, db_version: int, self_hostname: str):
     """
     Setup and teardown of two full nodes, with blockchains and separate DBs.
     """
@@ -366,6 +369,7 @@ async def setup_two_nodes(consensus_constants: ConsensusConstants, db_version: i
             setup_full_node(
                 consensus_constants,
                 "blockchain_test.db",
+                self_hostname,
                 21234,
                 await create_block_tools_async(constants=test_constants, keychain=keychain1),
                 simulator=False,
@@ -374,6 +378,7 @@ async def setup_two_nodes(consensus_constants: ConsensusConstants, db_version: i
             setup_full_node(
                 consensus_constants,
                 "blockchain_test_2.db",
+                self_hostname,
                 21235,
                 await create_block_tools_async(constants=test_constants, keychain=keychain2),
                 simulator=False,
@@ -389,7 +394,7 @@ async def setup_two_nodes(consensus_constants: ConsensusConstants, db_version: i
         await _teardown_nodes(node_iters)
 
 
-async def setup_n_nodes(consensus_constants: ConsensusConstants, n: int, db_version: int):
+async def setup_n_nodes(consensus_constants: ConsensusConstants, n: int, db_version: int, self_hostname: str):
     """
     Setup and teardown of n full nodes, with blockchains and separate DBs.
     """
@@ -403,6 +408,7 @@ async def setup_n_nodes(consensus_constants: ConsensusConstants, n: int, db_vers
             setup_full_node(
                 consensus_constants,
                 f"blockchain_test_{i}.db",
+                self_hostname,
                 port_start + i,
                 await create_block_tools_async(constants=test_constants, keychain=keyring.get_keychain()),
                 simulator=False,
@@ -428,10 +434,22 @@ async def setup_node_and_wallet(
         btools = await create_block_tools_async(constants=test_constants, keychain=keychain)  # xxx
         node_iters = [
             setup_full_node(
-                consensus_constants, "blockchain_test.db", 21234, btools, simulator=False, db_version=db_version
+                consensus_constants,
+                "blockchain_test.db",
+                btools.config["self_hostname"],
+                21234,
+                btools,
+                simulator=False,
+                db_version=db_version,
             ),
             setup_wallet_node(
-                21235, consensus_constants, btools, None, starting_height=starting_height, key_seed=key_seed
+                btools.config["self_hostname"],
+                21235,
+                consensus_constants,
+                btools,
+                None,
+                starting_height=starting_height,
+                key_seed=key_seed,
             ),
         ]
 
@@ -443,7 +461,7 @@ async def setup_node_and_wallet(
         await _teardown_nodes(node_iters)
 
 
-async def setup_simulators_and_wallets(
+async def setup_simulators_and_wallets(  # XXX
     simulator_count: int,
     wallet_count: int,
     dic: Dict,
@@ -462,11 +480,13 @@ async def setup_simulators_and_wallets(
         for index in range(0, simulator_count):
             port = starting_port + index
             db_name = f"blockchain_test_{port}.db"
+            # xxx convert bt_tools to bt fixture
             bt_tools = await create_block_tools_async(
                 consensus_constants, const_dict=dic, keychain=keychain1
             )  # block tools modifies constants
             sim = setup_full_node(
                 bt_tools.constants,
+                bt_tools.config["self_hostname"],
                 db_name,
                 port,
                 bt_tools,
@@ -486,6 +506,7 @@ async def setup_simulators_and_wallets(
                 consensus_constants, const_dict=dic, keychain=keychain2
             )  # block tools modifies constants
             wlt = setup_wallet_node(
+                bt_tools.config["self_hostname"],
                 port,
                 bt_tools.constants,
                 bt_tools,
@@ -502,10 +523,10 @@ async def setup_simulators_and_wallets(
         await _teardown_nodes(node_iters)
 
 
-async def setup_farmer_harvester(consensus_constants: ConsensusConstants, start_services: bool = True):
+async def setup_farmer_harvester(bt: BlockTools, consensus_constants: ConsensusConstants, start_services: bool = True):
     node_iters = [
-        setup_harvester(21234, 21235, consensus_constants, bt, start_services),
-        setup_farmer(21235, consensus_constants, bt, start_service=start_services),
+        setup_harvester(bt, bt.config["self_hostname"], 21234, 21235, consensus_constants, start_services),
+        setup_farmer(bt, bt.config["self_hostname"], 21235, consensus_constants, start_service=start_services),
     ]
 
     harvester_service = await node_iters[0].__anext__()
@@ -516,11 +537,11 @@ async def setup_farmer_harvester(consensus_constants: ConsensusConstants, start_
     await _teardown_nodes(node_iters)
 
 
-async def setup_full_system(
+async def setup_full_system(  # xxx which of these 3 block_tools are needed in which places?
     consensus_constants: ConsensusConstants,
-    shared_b_tools,
-    b_tools=None,
-    b_tools_1=None,
+    shared_b_tools: BlockTools,
+    b_tools: BlockTools = None,
+    b_tools_1: BlockTools = None,
     connect_to_daemon=False,
     db_version=1,
 ):
@@ -530,14 +551,17 @@ async def setup_full_system(
         if b_tools_1 is None:
             b_tools_1 = await create_block_tools_async(constants=test_constants, keychain=keychain2)
         node_iters = [
-            setup_introducer(21233, shared_b_tools),
-            setup_harvester(21234, 21235, consensus_constants, b_tools),
-            setup_farmer(21235, consensus_constants, b_tools, uint16(21237)),
-            setup_vdf_clients(8000),
+            setup_introducer(shared_b_tools, 21233),
+            setup_harvester(shared_b_tools, shared_b_tools.config["self_hostname"], 21234, 21235, consensus_constants),
+            setup_farmer(
+                shared_b_tools, shared_b_tools.config["self_hostname"], 21235, consensus_constants, uint16(21237)
+            ),
+            setup_vdf_clients(shared_b_tools, shared_b_tools.config["self_hostname"], 8000),
             setup_timelord(21236, 21237, 21241, False, consensus_constants, b_tools),
             setup_full_node(
                 consensus_constants,
                 "blockchain_test.db",
+                shared_b_tools.config["self_hostname"],
                 21237,
                 b_tools,
                 21233,
@@ -550,6 +574,7 @@ async def setup_full_system(
             setup_full_node(
                 consensus_constants,
                 "blockchain_test_2.db",
+                shared_b_tools.config["self_hostname"],
                 21238,
                 b_tools_1,
                 21233,
@@ -559,7 +584,7 @@ async def setup_full_system(
                 connect_to_daemon,
                 db_version=db_version,
             ),
-            setup_vdf_client(7999),
+            setup_vdf_client(shared_b_tools, shared_b_tools.config["self_hostname"], 7999),
             setup_timelord(21239, 1000, 21242, True, consensus_constants, b_tools_1),
         ]
 
