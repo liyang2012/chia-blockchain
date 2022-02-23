@@ -1,13 +1,14 @@
 from io import TextIOWrapper
 import click
 
-from chia import __version__
+#from chia import __version__
 from chia.cmds.configure import configure_cmd
 from chia.cmds.farm import farm_cmd
 from chia.cmds.init import init_cmd
 from chia.cmds.keys import keys_cmd
 from chia.cmds.netspace import netspace_cmd
 from chia.cmds.passphrase import passphrase_cmd
+from chia.cmds.peer import peer_cmd
 from chia.cmds.plots import plots_cmd
 from chia.cmds.show import show_cmd
 from chia.cmds.start import start_cmd
@@ -44,9 +45,10 @@ def monkey_patch_click() -> None:
 
     click.core._verify_python3_env = lambda *args, **kwargs: 0  # type: ignore[attr-defined]
 
+__version__='1.2.12.dev298+gce533879e.d20220223'
 
 @click.group(
-    help=f"\n  Manage chia blockchain infrastructure ({__version__})\n",
+    #help=f"\n  Manage chia blockchain infrastructure ({__version__})\n",
     epilog="Try 'chia start node', 'chia netspace -d 192', or 'chia show -s'",
     context_settings=CONTEXT_SETTINGS,
 )
@@ -126,6 +128,7 @@ def run_daemon_cmd(ctx: click.Context, wait_for_unlock: bool) -> None:
 
 
 cli.add_command(keys_cmd)
+cli.add_command(peer_cmd)
 cli.add_command(plots_cmd)
 cli.add_command(wallet_cmd)
 cli.add_command(plotnft_cmd)
