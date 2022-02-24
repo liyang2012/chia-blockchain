@@ -83,8 +83,8 @@ async def peer_async(
     try:
         config = load_config(DEFAULT_ROOT_PATH, "config.yaml")
         self_hostname = config["self_hostname"]
-        if rpc_port is None:
-            rpc_port = config["full_node"]["rpc_port"]
+        # if rpc_port is None:
+        rpc_port = config["full_node"]["rpc_port"]
         client = await FullNodeRpcClient.create(self_hostname, uint16(rpc_port), DEFAULT_ROOT_PATH, config)
 
         # if state:
@@ -284,7 +284,7 @@ async def peer_async(
     await client.await_closed()
 
 
-@click.command("show", short_help="Show node information")
+@click.command("peer", short_help="Add, remove, or show peering connections")
 # @click.option(
 #     "-p",
 #     "--rpc-port",
